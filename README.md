@@ -31,7 +31,7 @@ Este projeto é uma aplicação web desenvolvida com **Next.js 13+ (React 19)** 
 Antes de começar, verifique se você tem os seguintes softwares instalados:
 
 - [Node.js](https://nodejs.org/) (versão 18 ou superior)
-- [npm](https://www.npmjs.com/) ou [yarn](https://yarnpkg.com/)
+- [npm](https://www.npmjs.com/)  
 - Banco de dados configurado e rodando (PostgreSQL, MySQL etc.)
 
 ---
@@ -41,5 +41,10 @@ Antes de começar, verifique se você tem os seguintes softwares instalados:
 #### 1. Clone o repositório
 
 ```bash
-git clone [https://github.com/seu-usuario/nome-do-repositorio.git](https://github.com/davi-oliver/SPTrans-frontend.git)
+git clone https://github.com/davi-oliver/SPTrans-frontend.git
 cd SPTrans-frontend
+npm install ou npm i
+npm run dev 
+
+
+ 

@@ -15,9 +15,16 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Settings2 } from "lucide-react"
-import { tableColumns } from "./dashboard"
 
- 
+// Definição das colunas disponíveis por tabela
+const tableColumns: Record<string, string[]> = {
+  Linha: ["codigo", "letreironumerico", "descritivoprincipal"],
+  Parada: ["codigo", "nome", "latitude", "longitude"],
+  Veiculo: ["prefixo", "acessopcd"],
+  Corredor: ["codigo", "nome"],
+  Itinerario: ["datareferencia", "previsaochegada"],
+  LinhaParada: ["codigolinha", "codigoparada"],
+}
 
 interface ColumnSelectorProps {
   selectedTables: string[]
@@ -77,7 +84,7 @@ export default function ColumnSelector({ selectedTables, selectedColumns, setSel
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 bg-transparent">
+        <Button variant="outline" size="sm" className="gap-2">
           <Settings2 className="h-4 w-4" />
           Configurar Colunas
         </Button>
@@ -141,4 +148,3 @@ export default function ColumnSelector({ selectedTables, selectedColumns, setSel
     </Dialog>
   )
 }
- 

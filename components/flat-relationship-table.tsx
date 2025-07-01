@@ -1,3 +1,4 @@
+
 "use client"
 
 import type React from "react"
@@ -12,9 +13,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { CheckCircle2, XCircle, ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ArrowUpDown } from "lucide-react"
 import ResultsFilter from "@/components/results-filter"
 
 interface FilterCondition {
@@ -24,17 +25,49 @@ interface FilterCondition {
   value: string
 }
 
-interface ResultsTableProps {
+interface FlatRelationshipTableProps {
   data: any[]
-  visibleColumns: string[]
+  mainTableColumns: string[]
+  relationshipColumns: string[]
+  relationshipKey: string
 }
 
-export default function ResultsTable({ data, visibleColumns }: ResultsTableProps) {
+export default function FlatRelationshipTable({
+  data,
+  mainTableColumns,
+  relationshipColumns,
+  relationshipKey,
+}: FlatRelationshipTableProps) {
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState<FilterCondition[]>([])
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: "asc" | "desc" } | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const itemsPerPage = 10
+
+  // Achatar os dados combinando campos principais com campos do relacionamento
+  const flattenData = (data: any[]) => {
+    return data.map((item, index) => {
+      const flatItem: any = { _originalIndex: index }
+
+      // Adicionar campos da tabela principal
+      mainTableColumns.forEach((column) => {
+        flatItem[column] = item[column]
+      })
+
+      // Adicionar campos do relacionamento (objeto único)
+      const relationshipData = item[relationshipKey]
+      if (relationshipData && typeof relationshipData === "object" && !Array.isArray(relationshipData)) {
+        relationshipColumns.forEach((column) => {
+          flatItem[column] = relationshipData[column]
+        })
+      }
+
+      return flatItem
+    })
+  }
+
+  // Todas as colunas visíveis (principais + relacionamento)
+  const allColumns = [...mainTableColumns, ...relationshipColumns]
 
   // Aplicar filtros aos dados
   const applyFilters = (data: any[], filters: FilterCondition[]) => {
@@ -45,9 +78,8 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
         const { column, operator, value } = filter
         const itemValue = item[column]
 
-        if (itemValue === undefined) return false
+        if (itemValue === undefined || itemValue === null) return false
 
-        // Converter para string para comparação
         const itemValueStr = String(itemValue).toLowerCase()
         const filterValueStr = value.toLowerCase()
 
@@ -83,7 +115,7 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
 
     const searchLower = query.toLowerCase()
     return data.filter((item) => {
-      return visibleColumns.some((column) => {
+      return allColumns.some((column) => {
         const value = item[column]
         if (value === undefined || value === null) return false
         return String(value).toLowerCase().includes(searchLower)
@@ -99,30 +131,27 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
       const aValue = a[sortConfig.column]
       const bValue = b[sortConfig.column]
 
-      // Lidar com valores nulos ou indefinidos
       if (aValue === undefined || aValue === null) return sortConfig.direction === "asc" ? -1 : 1
       if (bValue === undefined || bValue === null) return sortConfig.direction === "asc" ? 1 : -1
 
-      // Comparar números
       if (typeof aValue === "number" && typeof bValue === "number") {
         return sortConfig.direction === "asc" ? aValue - bValue : bValue - aValue
       }
 
-      // Comparar strings
       const aString = String(aValue).toLowerCase()
       const bString = String(bValue).toLowerCase()
       return sortConfig.direction === "asc" ? aString.localeCompare(bString) : bString.localeCompare(aString)
     })
   }
 
-  // Processar dados com filtros, pesquisa e ordenação
+  // Processar dados com achatamento, filtros, pesquisa e ordenação
   const processedData = useMemo(() => {
-    let result = [...data]
+    let result = flattenData(data)
     result = applyFilters(result, filters)
     result = applySearch(result, searchQuery)
     result = applySorting(result, sortConfig)
     return result
-  }, [data, filters, searchQuery, sortConfig])
+  }, [data, filters, searchQuery, sortConfig, mainTableColumns, relationshipColumns, relationshipKey])
 
   // Calcular paginação
   const totalPages = Math.ceil(processedData.length / itemsPerPage)
@@ -133,25 +162,27 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
   // Alternar ordenação
   const toggleSort = (column: string) => {
     if (sortConfig?.column === column) {
-      // Se já estiver ordenando por esta coluna, inverte a direção
       setSortConfig({
         column,
         direction: sortConfig.direction === "asc" ? "desc" : "asc",
       })
     } else {
-      // Caso contrário, ordena por esta coluna em ordem ascendente
       setSortConfig({ column, direction: "asc" })
     }
   }
 
-  // Função para renderizar o valor da célula com base no tipo
+  // Função para renderizar o valor da célula
   const renderCellValue = (value: any) => {
     if (value === null || value === undefined) {
       return "-"
     }
 
     if (typeof value === "boolean") {
-      return value ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />
+      return value ? "Sim" : "Não"
+    }
+
+    if (typeof value === "number") {
+      return value.toLocaleString()
     }
 
     return value.toString()
@@ -168,6 +199,11 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
     setPage(1)
   }
 
+  // Obter nome da coluna formatado
+  const getColumnDisplayName = (column: string) => {
+    return column.charAt(0).toUpperCase() + column.slice(1)
+  }
+
   return (
     <div>
       <div className="mb-4">
@@ -179,20 +215,20 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
         />
       </div>
 
-      <ResultsFilter columns={visibleColumns} onApplyFilters={handleFiltersChange} />
+      <ResultsFilter columns={allColumns} onApplyFilters={handleFiltersChange} />
 
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              {visibleColumns.map((column) => (
+              {allColumns.map((column) => (
                 <TableHead key={column}>
                   <Button
                     variant="ghost"
                     onClick={() => toggleSort(column)}
                     className="flex items-center gap-1 p-0 font-medium hover:bg-transparent"
                   >
-                    {column}
+                    {getColumnDisplayName(column)}
                     <ArrowUpDown className="h-4 w-4" />
                   </Button>
                 </TableHead>
@@ -202,15 +238,15 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
           <TableBody>
             {currentItems.length > 0 ? (
               currentItems.map((item, index) => (
-                <TableRow key={index}>
-                  {visibleColumns.map((column) => (
+                <TableRow key={item._originalIndex || index}>
+                  {allColumns.map((column) => (
                     <TableCell key={`${index}-${column}`}>{renderCellValue(item[column])}</TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
+                <TableCell colSpan={allColumns.length} className="h-24 text-center">
                   Nenhum resultado encontrado.
                 </TableCell>
               </TableRow>
@@ -233,7 +269,6 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
               />
             </PaginationItem>
             {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
-              // Mostrar no máximo 5 páginas, centralizadas na página atual
               let pageNum = i + 1
               if (totalPages > 5) {
                 if (page > 3) {

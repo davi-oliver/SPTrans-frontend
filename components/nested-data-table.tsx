@@ -12,10 +12,13 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { CheckCircle2, XCircle, ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { ChevronDown, ChevronRight, ArrowUpDown } from "lucide-react"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import ResultsFilter from "@/components/results-filter"
+import type { LinhaData } from "@/lib/table-relationships"
 
 interface FilterCondition {
   id: string
@@ -24,17 +27,56 @@ interface FilterCondition {
   value: string
 }
 
-interface ResultsTableProps {
-  data: any[]
+interface NestedDataTableProps {
+  data: LinhaData[]
   visibleColumns: string[]
 }
 
-export default function ResultsTable({ data, visibleColumns }: ResultsTableProps) {
+export default function NestedDataTable({ data, visibleColumns }: NestedDataTableProps) {
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState<FilterCondition[]>([])
   const [sortConfig, setSortConfig] = useState<{ column: string; direction: "asc" | "desc" } | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
+  const [viewMode, setViewMode] = useState<"flat" | "nested">("nested")
   const itemsPerPage = 10
+
+  // Função para achatar os dados aninhados
+  const flattenData = (data: LinhaData[]) => {
+    const flattened: any[] = []
+
+    data.forEach((linha) => {
+      if (linha.linhaparada && linha.linhaparada.length > 0) {
+        linha.linhaparada.forEach((parada, index) => {
+          flattened.push({
+            // Dados da linha
+            codigo: linha.codigo,
+            letreironumerico: linha.letreironumerico,
+            descritivoprincipal: linha.descritivoprincipal,
+            // Dados da parada
+            codigolinha: parada.codigolinha,
+            codigoparada: parada.codigoparada,
+            sequencia: index + 1,
+            // ID único para a linha achatada
+            _flatId: `${linha.codigo}-${parada.codigoparada}`,
+          })
+        })
+      } else {
+        // Se não há paradas, ainda assim inclui a linha
+        flattened.push({
+          codigo: linha.codigo,
+          letreironumerico: linha.letreironumerico,
+          descritivoprincipal: linha.descritivoprincipal,
+          codigolinha: null,
+          codigoparada: null,
+          sequencia: null,
+          _flatId: `${linha.codigo}-empty`,
+        })
+      }
+    })
+
+    return flattened
+  }
 
   // Aplicar filtros aos dados
   const applyFilters = (data: any[], filters: FilterCondition[]) => {
@@ -45,7 +87,7 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
         const { column, operator, value } = filter
         const itemValue = item[column]
 
-        if (itemValue === undefined) return false
+        if (itemValue === undefined || itemValue === null) return false
 
         // Converter para string para comparação
         const itemValueStr = String(itemValue).toLowerCase()
@@ -115,14 +157,21 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
     })
   }
 
-  // Processar dados com filtros, pesquisa e ordenação
+  // Processar dados com base no modo de visualização
   const processedData = useMemo(() => {
-    let result = [...data]
+    let result: any[]
+
+    if (viewMode === "flat") {
+      result = flattenData(data)
+    } else {
+      result = [...data]
+    }
+
     result = applyFilters(result, filters)
     result = applySearch(result, searchQuery)
     result = applySorting(result, sortConfig)
     return result
-  }, [data, filters, searchQuery, sortConfig])
+  }, [data, filters, searchQuery, sortConfig, viewMode])
 
   // Calcular paginação
   const totalPages = Math.ceil(processedData.length / itemsPerPage)
@@ -133,25 +182,34 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
   // Alternar ordenação
   const toggleSort = (column: string) => {
     if (sortConfig?.column === column) {
-      // Se já estiver ordenando por esta coluna, inverte a direção
       setSortConfig({
         column,
         direction: sortConfig.direction === "asc" ? "desc" : "asc",
       })
     } else {
-      // Caso contrário, ordena por esta coluna em ordem ascendente
       setSortConfig({ column, direction: "asc" })
     }
   }
 
-  // Função para renderizar o valor da célula com base no tipo
+  // Alternar expansão de linha
+  const toggleRowExpansion = (codigo: number) => {
+    const newExpanded = new Set(expandedRows)
+    if (newExpanded.has(codigo)) {
+      newExpanded.delete(codigo)
+    } else {
+      newExpanded.add(codigo)
+    }
+    setExpandedRows(newExpanded)
+  }
+
+  // Função para renderizar o valor da célula
   const renderCellValue = (value: any) => {
     if (value === null || value === undefined) {
       return "-"
     }
 
     if (typeof value === "boolean") {
-      return value ? <CheckCircle2 className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />
+      return value ? "Sim" : "Não"
     }
 
     return value.toString()
@@ -170,13 +228,25 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
 
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <Input
           placeholder="Pesquisar em todas as colunas..."
           value={searchQuery}
           onChange={handleSearchChange}
           className="max-w-md"
         />
+        <div className="flex gap-2">
+          <Button
+            variant={viewMode === "nested" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("nested")}
+          >
+            Visualização Aninhada
+          </Button>
+          <Button variant={viewMode === "flat" ? "default" : "outline"} size="sm" onClick={() => setViewMode("flat")}>
+            Visualização Plana
+          </Button>
+        </div>
       </div>
 
       <ResultsFilter columns={visibleColumns} onApplyFilters={handleFiltersChange} />
@@ -185,6 +255,7 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
         <Table>
           <TableHeader>
             <TableRow>
+              {viewMode === "nested" && <TableHead className="w-12"></TableHead>}
               {visibleColumns.map((column) => (
                 <TableHead key={column}>
                   <Button
@@ -201,16 +272,83 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
           </TableHeader>
           <TableBody>
             {currentItems.length > 0 ? (
-              currentItems.map((item, index) => (
-                <TableRow key={index}>
-                  {visibleColumns.map((column) => (
-                    <TableCell key={`${index}-${column}`}>{renderCellValue(item[column])}</TableCell>
-                  ))}
-                </TableRow>
-              ))
+              viewMode === "nested" ? (
+                // Visualização aninhada
+                currentItems.map((linha: LinhaData, index) => (
+                  <Collapsible key={linha.codigo} asChild>
+                    <>
+                      <TableRow>
+                        <TableCell>
+                          <CollapsibleTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleRowExpansion(linha.codigo)}
+                              className="p-0"
+                            >
+                              {expandedRows.has(linha.codigo) ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </CollapsibleTrigger>
+                        </TableCell>
+                        {visibleColumns.map((column) => (
+                          <TableCell key={`${index}-${column}`}>
+                            {column === "linhaparada" ? (
+                              <Badge variant="secondary">{linha.linhaparada?.length || 0} paradas</Badge>
+                            ) : (
+                              renderCellValue((linha as any)[column])
+                            )}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                      <CollapsibleContent asChild>
+                        <TableRow>
+                          <TableCell colSpan={visibleColumns.length + 1} className="bg-muted/50 p-0">
+                            {linha.linhaparada && linha.linhaparada.length > 0 && (
+                              <div className="p-4">
+                                <h4 className="mb-2 font-medium">Paradas da Linha:</h4>
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+                                  {linha.linhaparada.map((parada, paradaIndex) => (
+                                    <div key={paradaIndex} className="rounded border p-2 text-sm">
+                                      <div>
+                                        <strong>Código:</strong> {parada.codigoparada}
+                                      </div>
+                                      <div>
+                                        <strong>Linha:</strong> {parada.codigolinha}
+                                      </div>
+                                      <div>
+                                        <strong>Sequência:</strong> {paradaIndex + 1}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      </CollapsibleContent>
+                    </>
+                  </Collapsible>
+                ))
+              ) : (
+                // Visualização plana
+                currentItems.map((item, index) => (
+                  <TableRow key={item._flatId || index}>
+                    {visibleColumns.map((column) => (
+                      <TableCell key={`${index}-${column}`}>{renderCellValue(item[column])}</TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )
             ) : (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
+                <TableCell
+                  colSpan={visibleColumns.length + (viewMode === "nested" ? 1 : 0)}
+                  className="h-24 text-center"
+                >
                   Nenhum resultado encontrado.
                 </TableCell>
               </TableRow>
@@ -233,7 +371,6 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
               />
             </PaginationItem>
             {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
-              // Mostrar no máximo 5 páginas, centralizadas na página atual
               let pageNum = i + 1
               if (totalPages > 5) {
                 if (page > 3) {
@@ -274,6 +411,7 @@ export default function ResultsTable({ data, visibleColumns }: ResultsTableProps
 
       <div className="mt-2 text-xs text-muted-foreground">
         Mostrando {currentItems.length} de {processedData.length} resultados
+        {viewMode === "nested" && ` (${data.length} linhas principais)`}
       </div>
     </div>
   )
